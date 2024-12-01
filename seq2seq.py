@@ -18,6 +18,10 @@ import tqdm
 import evaluate
 import torch.distributions as distributions
 
+torch.manual_seed(42)
+np.random.seed(42)
+random.seed(42)
+
 
 class Encoder(nn.Module):
     def __init__(self, input_dim, embedding_dim, hidden_dim, n_layers, dropout):
@@ -151,9 +155,10 @@ def seq2seq_annealing(init_temperature: int, num_steps: int, graph: nx.Graph) ->
     decoder_embedding_dim = 256
     hidden_dim = 512
     n_layers = 2
-    encoder_dropout = 0.5
-    decoder_dropout = 0.5
-    batch_size = 50
+    encoder_dropout = 0.1
+    decoder_dropout = 0.1
+    batch_size = 20
+
     advantage_list = []
     stats_losses = []
     stats_advantages = []
@@ -193,7 +198,7 @@ def seq2seq_annealing(init_temperature: int, num_steps: int, graph: nx.Graph) ->
         # temperature = init_temperature * np.exp(-k / (num_steps / 10))
 
         src = torch.tensor(curr_solution, dtype=torch.long).unsqueeze(1).to(device)  # [seq length, batch size]
-        trg = torch.zeros_like(src).to(device)  # dummy target
+        trg = torch.full_like(src, 2).to(device)  # dummy target
 
         # Get outputs from model
         outputs = model(src, trg, teacher_forcing_ratio=0)  # outputs: [seq length, batch size, output_dim]
@@ -212,7 +217,11 @@ def seq2seq_annealing(init_temperature: int, num_steps: int, graph: nx.Graph) ->
         scores.append(new_score)
 
         # Compute advantage
-        advantage = new_score - curr_score
+        # advantage = new_score - curr_score
+
+        baseline = np.mean(scores[-4*batch_size:]) if len(scores) >= 100 else curr_score
+        advantage = new_score - baseline
+        #advantage = new_score
         advantage_list.append(advantage)
 
         batch_log_probs.append(log_prob_sum)
